@@ -6,8 +6,8 @@ BUILD="$PROJ/.build/release"
 APP_NAME="PkgLens"
 APP="$PROJ/$APP_NAME.app"
 ICON_SRC="$PROJ/Sources/PkgLens/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
-DMG_OUT="$PROJ/$APP_NAME-1.0.0.dmg"
-VERSION="1.0.0"
+DMG_OUT="$PROJ/$APP_NAME-1.0.1.dmg"
+VERSION="1.0.1"
 
 echo "==> Cleaning previous app bundle..."
 rm -rf "$APP" "$DMG_OUT" /tmp/PkgLens.iconset

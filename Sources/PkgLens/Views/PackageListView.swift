@@ -54,7 +54,11 @@ struct PackageListView: View {
                     description: Text("No package managers detected on this system.")
                 )
             } else if vm.filtered.isEmpty && !vm.packages.isEmpty {
-                filtersEmptyState
+                if case .updates = vm.selectedFilter {
+                    updatesEmptyState
+                } else {
+                    filtersEmptyState
+                }
             }
         }
         .navigationTitle("Packages")
@@ -86,9 +90,30 @@ struct PackageListView: View {
         .background(.background)
     }
 
+    private var updatesEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(.green)
+
+            VStack(spacing: 4) {
+                Text("Everything is up to date")
+                    .font(.headline)
+                Text("Run \"Scan for Updates\" in the sidebar to check for newer versions.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
+    }
+
     private var activeFilterDescription: String {
         var parts: [String] = []
         if case .source(let s) = vm.selectedFilter { parts.append("Source: \(s.displayName)") }
+        if case .updates       = vm.selectedFilter { parts.append("Updates only") }
         if vm.showOrphansOnly { parts.append("Orphans only") }
         if vm.showStaleOnly   { parts.append("Stale (90+ days)") }
         return parts.isEmpty ? "No packages match the current filters."

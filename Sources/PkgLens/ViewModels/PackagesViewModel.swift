@@ -12,6 +12,7 @@ enum SortOrder: String, CaseIterable {
 enum SourceFilter: Hashable, Sendable {
     case all
     case source(PackageSource)
+    case updates
 }
 
 @MainActor
@@ -47,10 +48,20 @@ final class PackagesViewModel: ObservableObject {
                 switch selectedFilter {
                 case .all:            return true
                 case .source(let s): return pkg.source == s
+                case .updates:        return pkg.isOutdated
                 }
             }()
-            let matchesOrphan = !showOrphansOnly || pkg.isOrphan
-            let matchesStale  = !showStaleOnly   || pkg.isStale
+            // Orphan/stale toggles don't narrow the Updates view — you want all
+            // outdated packages regardless of those quick filters.
+            let matchesOrphan: Bool
+            let matchesStale: Bool
+            if case .updates = selectedFilter {
+                matchesOrphan = true
+                matchesStale  = true
+            } else {
+                matchesOrphan = !showOrphansOnly || pkg.isOrphan
+                matchesStale  = !showStaleOnly   || pkg.isStale
+            }
             return matchesSearch && matchesSource && matchesOrphan && matchesStale
         }
 
@@ -209,6 +220,40 @@ final class PackagesViewModel: ObservableObject {
             throw error
         }
         // Reload to pick up the new version on success.
+        await brew.invalidateCache()
+        await loadAll()
+    }
+
+    // MARK: - Bulk Upgrade
+
+    var upgradeAllEligible: [Package] {
+        packages.filter {
+            $0.isOutdated && ($0.source == .brewFormula || $0.source == .brewCask || $0.source == .npm)
+        }
+    }
+
+    func upgradeAll() async {
+        let targets = upgradeAllEligible
+        guard !targets.isEmpty else { return }
+        isLoading     = true
+        loadingStatus = "Upgrading packages…"
+        for pkg in targets {
+            do {
+                switch pkg.source {
+                case .brewFormula:
+                    _ = try await ProcessRunner.run("brew", arguments: ["upgrade", pkg.name])
+                case .brewCask:
+                    _ = try await ProcessRunner.run("brew", arguments: ["upgrade", "--cask", pkg.name])
+                case .npm:
+                    let path = (try? await npm.resolvedPath()) ?? "npm"
+                    _ = try await ProcessRunner.run(path, arguments: ["install", "-g", pkg.name])
+                default:
+                    break
+                }
+            } catch {
+                errors.append("\(pkg.name): \(error.localizedDescription)")
+            }
+        }
         await brew.invalidateCache()
         await loadAll()
     }

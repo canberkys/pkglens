@@ -18,8 +18,14 @@ struct PackageDetailView: View {
         VStack(spacing: 0) {
             // ── Full-width top: header + banners ──────────────────────────
             VStack(alignment: .leading, spacing: 0) {
-                HeaderSection(package: package)
-                    .padding(24)
+                HeaderSection(
+                    package: package,
+                    isCheckingVersion: isCheckingVersion,
+                    isUninstalling: isUninstalling,
+                    onCheckVersion: { Task { await performCheckVersion() } },
+                    onUninstall: { showUninstallConfirm = true }
+                )
+                .padding(24)
 
                 if package.isOutdated, let latest = package.latestVersion {
                     let canUpgrade = package.source == .brewFormula
@@ -101,15 +107,6 @@ struct PackageDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .safeAreaInset(edge: .bottom) {
-            ActionBar(
-                package: package,
-                isUninstalling: isUninstalling,
-                isCheckingVersion: isCheckingVersion,
-                onCheckVersion: { Task { await performCheckVersion() } },
-                onUninstall: { showUninstallConfirm = true }
-            )
-        }
         .sheet(isPresented: $showUninstallConfirm) {
             UninstallConfirmView(package: package) {
                 showUninstallConfirm = false
@@ -178,16 +175,50 @@ struct PackageDetailView: View {
 
 private struct HeaderSection: View {
     let package: Package
+    let isCheckingVersion: Bool
+    let isUninstalling: Bool
+    let onCheckVersion: () -> Void
+    let onUninstall: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Source badge
-            Label(package.source.displayName, systemImage: package.source.icon)
-                .font(.caption)
-                .foregroundStyle(package.source.color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(package.source.color.opacity(0.1), in: Capsule())
+            // Top row: badge + action buttons
+            HStack(alignment: .center, spacing: 8) {
+                Label(package.source.displayName, systemImage: package.source.icon)
+                    .font(.caption)
+                    .foregroundStyle(package.source.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(package.source.color.opacity(0.1), in: Capsule())
+
+                Spacer()
+
+                if package.source != .cargo {
+                    if isCheckingVersion {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button(action: onCheckVersion) {
+                            Label(
+                                package.isOutdated ? "Re-check Version" : "Check Version",
+                                systemImage: "arrow.clockwise.circle"
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+
+                if isUninstalling {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(role: .destructive, action: onUninstall) {
+                        Label("Uninstall", systemImage: "trash")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .controlSize(.small)
+                }
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(package.name)
@@ -475,53 +506,3 @@ private struct NotesSection: View {
     }
 }
 
-// MARK: - Action bar
-
-private struct ActionBar: View {
-    let package: Package
-    let isUninstalling: Bool
-    let isCheckingVersion: Bool
-    let onCheckVersion: () -> Void
-    let onUninstall: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            if !package.installedOnRequest {
-                Label("Installed as dependency", systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-
-            // Per-package version check — only for sources that support it
-            if package.source != .cargo {
-                if isCheckingVersion {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button(action: onCheckVersion) {
-                        Label(
-                            package.isOutdated ? "Re-check Version" : "Check for New Version",
-                            systemImage: "arrow.clockwise.circle"
-                        )
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                }
-            }
-
-            if isUninstalling {
-                ProgressView("Uninstalling…").controlSize(.small)
-            } else {
-                Button(role: .destructive, action: onUninstall) {
-                    Label("Uninstall", systemImage: "trash")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .controlSize(.regular)
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-        .background(.bar)
-    }
-}

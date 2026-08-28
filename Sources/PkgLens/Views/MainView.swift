@@ -29,8 +29,15 @@ struct MainView: View {
         .toolbar { ToolbarItems(onExport: { showExportPicker = true }) }
         .task { await vm.loadAll() }
         .onChange(of: vm.packages) {
-            if let sel = selectedPackage, !vm.packages.contains(sel) {
-                selectedPackage = nil
+            // Package is a struct — equality breaks when latestVersion mutates after
+            // checkVersion(). Match by stable ID and propagate the updated value so
+            // the detail view re-renders with the new latestVersion in place.
+            if let sel = selectedPackage {
+                if let updated = vm.packages.first(where: { $0.id == sel.id }) {
+                    selectedPackage = updated
+                } else {
+                    selectedPackage = nil  // removed (uninstall / full reload)
+                }
             }
         }
         .sheet(isPresented: $showBulkRemoveConfirm) {
@@ -61,6 +68,7 @@ struct MainView: View {
 private struct SidebarView: View {
     @EnvironmentObject private var vm: PackagesViewModel
     @Binding var showBulkRemoveConfirm: Bool
+    @State private var showUpdateAllConfirm = false
 
     var body: some View {
         List(selection: $vm.selectedFilter) {
@@ -112,12 +120,54 @@ private struct SidebarView: View {
                 }
                 .toggleStyle(.checkbox)
                 .badge(vm.staleCount)
+            }
 
-                if vm.updateCount > 0 {
-                    Label("\(vm.updateCount) updates available", systemImage: "arrow.up.circle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.blue)
-                        .padding(.leading, 4)
+            Section("Updates") {
+                SidebarRow(label: "Available Updates",
+                           icon: "arrow.up.circle.fill",
+                           color: .blue,
+                           count: vm.updateCount)
+                    .tag(SourceFilter.updates)
+
+                if vm.isCheckingUpdates {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text("Scanning…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.leading, 4)
+                } else {
+                    Button {
+                        Task { await vm.checkForUpdates() }
+                    } label: {
+                        Label("Scan for Updates", systemImage: "arrow.clockwise")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 4)
+                    .disabled(vm.isLoading)
+                }
+
+                if !vm.upgradeAllEligible.isEmpty {
+                    Button {
+                        showUpdateAllConfirm = true
+                    } label: {
+                        Label("Update All (\(vm.upgradeAllEligible.count))", systemImage: "arrow.up.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 4)
+                }
+            }
+            .sheet(isPresented: $showUpdateAllConfirm) {
+                UpdateAllConfirmView(packages: vm.upgradeAllEligible) {
+                    showUpdateAllConfirm = false
+                    Task { await vm.upgradeAll() }
+                } onCancel: {
+                    showUpdateAllConfirm = false
                 }
             }
 
@@ -208,6 +258,62 @@ private struct ToolbarItems: ToolbarContent {
             .fixedSize()
             .help("Sort order")
         }
+    }
+}
+
+// MARK: - Update All Confirm
+
+private struct UpdateAllConfirmView: View {
+    let packages: [Package]
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle().fill(.blue.opacity(0.1)).frame(width: 72, height: 72)
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 30)).foregroundStyle(.blue)
+            }
+            VStack(spacing: 6) {
+                Text("Update \(packages.count) \(packages.count == 1 ? "package" : "packages")?")
+                    .font(.headline).multilineTextAlignment(.center)
+                Text("Homebrew and npm packages will be upgraded in-place.")
+                    .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(packages, id: \.id) { pkg in
+                        HStack {
+                            Text("• \(pkg.name)")
+                                .font(.system(.caption, design: .monospaced))
+                            Spacer()
+                            if let latest = pkg.latestVersion {
+                                Text("\(pkg.version) → \(latest)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6))
+            }
+            .frame(maxHeight: 160)
+
+            HStack(spacing: 12) {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction).controlSize(.large)
+                Button(action: onConfirm) {
+                    Label("Update All", systemImage: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction).controlSize(.large)
+            }
+        }
+        .padding(28)
+        .frame(width: 420)
     }
 }
 
