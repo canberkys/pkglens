@@ -1,0 +1,32 @@
+# Swift / SwiftPM
+.build/
+*.o
+*.d
+*.swp
+*.lock
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+.DS_Store
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V8
+.Trashes
+
+# Editor
+.idea/
+*.swp
+*~

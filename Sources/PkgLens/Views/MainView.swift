@@ -1,0 +1,427 @@
+import SwiftUI
+import AppKit
+
+struct MainView: View {
+    @EnvironmentObject private var vm: PackagesViewModel
+    @State private var selectedPackage: Package?
+    @State private var showExportPicker = false
+    @State private var showBulkRemoveConfirm = false
+
+    var body: some View {
+        NavigationSplitView {
+            SidebarView(showBulkRemoveConfirm: $showBulkRemoveConfirm)
+                .environmentObject(vm)
+                .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 320)
+        } content: {
+            PackageListView(selectedPackage: $selectedPackage)
+                .environmentObject(vm)
+        } detail: {
+            if let pkg = selectedPackage {
+                PackageDetailView(package: pkg)
+                    .environmentObject(vm)
+                    .id(pkg.id)
+            } else {
+                WelcomeDetailView()
+                    .environmentObject(vm)
+            }
+        }
+        .searchable(text: $vm.searchText, placement: .toolbar, prompt: "Search packages…")
+        .toolbar { ToolbarItems(onExport: { showExportPicker = true }) }
+        .task { await vm.loadAll() }
+        .onChange(of: vm.packages) {
+            if let sel = selectedPackage, !vm.packages.contains(sel) {
+                selectedPackage = nil
+            }
+        }
+        .sheet(isPresented: $showBulkRemoveConfirm) {
+            BulkRemoveConfirmView(packages: vm.orphansToRemove) {
+                showBulkRemoveConfirm = false
+                Task { await vm.removeAllOrphans() }
+            } onCancel: {
+                showBulkRemoveConfirm = false
+            }
+        }
+        .sheet(isPresented: $showExportPicker) {
+            ExportSheet()
+                .environmentObject(vm)
+        }
+        .alert("Load Errors", isPresented: Binding(
+            get: { !vm.errors.isEmpty },
+            set: { if !$0 { vm.errors = [] } }
+        )) {
+            Button("OK") { vm.errors = [] }
+        } message: {
+            Text(vm.errors.joined(separator: "\n"))
+        }
+    }
+}
+
+// MARK: - Sidebar
+
+private struct SidebarView: View {
+    @EnvironmentObject private var vm: PackagesViewModel
+    @Binding var showBulkRemoveConfirm: Bool
+
+    var body: some View {
+        List(selection: $vm.selectedFilter) {
+            Section("Sources") {
+                SidebarRow(label: "All Packages",
+                           icon: "square.grid.2x2.fill",
+                           color: .primary,
+                           count: vm.packages.count)
+                    .tag(SourceFilter.all)
+
+                ForEach(PackageSource.allCases, id: \.self) { source in
+                    SidebarRow(label: source.displayName,
+                               icon: source.icon,
+                               color: source.color,
+                               count: vm.count(for: source))
+                        .tag(SourceFilter.source(source))
+                }
+            }
+
+            Section("Quick Filters") {
+                Toggle(isOn: $vm.showOrphansOnly) {
+                    Label {
+                        Text("Orphans")
+                    } icon: {
+                        Image(systemName: "leaf.fill").foregroundStyle(.green)
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .badge(vm.orphanCount)
+
+                if vm.showOrphansOnly && !vm.orphansToRemove.isEmpty {
+                    Button {
+                        showBulkRemoveConfirm = true
+                    } label: {
+                        Label("Remove All Orphans", systemImage: "trash")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 4)
+                }
+
+                Toggle(isOn: $vm.showStaleOnly) {
+                    Label {
+                        Text("Stale (90+ days)")
+                    } icon: {
+                        Image(systemName: "clock.badge.exclamationmark").foregroundStyle(.orange)
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .badge(vm.staleCount)
+
+                if vm.updateCount > 0 {
+                    Label("\(vm.updateCount) updates available", systemImage: "arrow.up.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                        .padding(.leading, 4)
+                }
+            }
+
+            if !vm.recentRemovals.isEmpty {
+                Section("Recent Removals") {
+                    ForEach(vm.recentRemovals) { entry in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(entry.name)
+                                .font(.system(.caption, design: .monospaced))
+                                .fontWeight(.medium)
+                            Text(entry.removedAt.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("PkgLens")
+        .safeAreaInset(edge: .bottom) {
+            if vm.isLoading {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text(vm.loadingStatus)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+        }
+    }
+}
+
+private struct SidebarRow: View {
+    let label: String
+    let icon: String
+    let color: Color
+    let count: Int
+
+    var body: some View {
+        Label {
+            Text(label)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(color)
+        }
+        .badge(count)
+    }
+}
+
+// MARK: - Toolbar
+
+private struct ToolbarItems: ToolbarContent {
+    @EnvironmentObject private var vm: PackagesViewModel
+    let onExport: () -> Void
+
+    var body: some ToolbarContent {
+        // Separate ToolbarItems so macOS can overflow/collapse each independently.
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onExport) {
+                Label("Export", systemImage: "square.and.arrow.up")
+            }
+            .disabled(vm.packages.isEmpty)
+            .help("Export package list")
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            checkUpdatesButton
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                Task { await vm.loadAll() }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(vm.isLoading)
+            .keyboardShortcut("r", modifiers: .command)
+            .help("Refresh all packages")
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Picker("Sort", selection: $vm.sortOrder) {
+                ForEach(SortOrder.allCases, id: \.self) { order in
+                    Text(order.rawValue).tag(order)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+            .help("Sort order")
+        }
+    }
+
+    @ViewBuilder
+    private var checkUpdatesButton: some View {
+        if vm.isCheckingUpdates {
+            ProgressView().controlSize(.small)
+                .help("Checking for updates…")
+        } else if vm.updateCount > 0 {
+            Button { Task { await vm.checkForUpdates() } } label: {
+                Label("\(vm.updateCount) updates", systemImage: "arrow.up.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .disabled(vm.isLoading)
+            .help("\(vm.updateCount) updates available — click to re-check")
+        } else {
+            Button { Task { await vm.checkForUpdates() } } label: {
+                Label("Check Updates", systemImage: "arrow.up.circle")
+            }
+            .disabled(vm.isLoading)
+            .help("Check for package updates")
+        }
+    }
+}
+
+// MARK: - Bulk Remove Confirm
+
+private struct BulkRemoveConfirmView: View {
+    let packages: [Package]
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle().fill(.red.opacity(0.1)).frame(width: 72, height: 72)
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 30)).foregroundStyle(.red)
+            }
+            VStack(spacing: 6) {
+                Text("Remove \(packages.count) orphan packages?")
+                    .font(.headline).multilineTextAlignment(.center)
+                Text("These packages have no dependents and were installed directly.")
+                    .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(packages, id: \.id) { pkg in
+                        Text("• \(pkg.name) (\(pkg.source.displayName))")
+                            .font(.system(.caption, design: .monospaced))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6))
+            }
+            .frame(maxHeight: 160)
+
+            HStack(spacing: 12) {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction).controlSize(.large)
+                Button(role: .destructive, action: onConfirm) {
+                    Label("Remove All", systemImage: "trash")
+                }
+                .buttonStyle(.borderedProminent).tint(.red)
+                .keyboardShortcut(.defaultAction).controlSize(.large)
+            }
+        }
+        .padding(28)
+        .frame(width: 400)
+    }
+}
+
+// MARK: - Export sheet
+
+private struct ExportSheet: View {
+    @EnvironmentObject private var vm: PackagesViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var format: ExportFormat = .markdown
+    @State private var writeError: String?
+
+    enum ExportFormat: String, CaseIterable {
+        case markdown = "Markdown"
+        case json     = "JSON"
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 36))
+                .foregroundStyle(.blue)
+
+            Text("Export Package List")
+                .font(.headline)
+
+            Text("\(vm.packages.count) packages will be exported")
+                .foregroundStyle(.secondary)
+
+            Picker("Format", selection: $format) {
+                ForEach(ExportFormat.allCases, id: \.self) { f in
+                    Text(f.rawValue).tag(f)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 200)
+
+            HStack(spacing: 12) {
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .controlSize(.large)
+
+                Button("Save…") { saveFile() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .controlSize(.large)
+            }
+        }
+        .padding(32)
+        .frame(width: 360)
+        .alert("Export Failed", isPresented: Binding(
+            get: { writeError != nil },
+            set: { if !$0 { writeError = nil } }
+        )) {
+            Button("OK") { writeError = nil }
+        } message: {
+            Text(writeError ?? "")
+        }
+    }
+
+    private func saveFile() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = format == .markdown ? "packages.md" : "packages.json"
+        panel.allowedContentTypes = format == .markdown ? [.text] : [.json]
+        panel.begin { response in
+            // User cancelled — keep the sheet open so they can retry or cancel.
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                if format == .markdown {
+                    try vm.exportMarkdown().write(to: url, atomically: true, encoding: .utf8)
+                } else {
+                    try vm.exportJSON().write(to: url)
+                }
+                // Only dismiss on a successful write.
+                dismiss()
+            } catch {
+                writeError = error.localizedDescription
+            }
+        }
+    }
+}
+
+// MARK: - Welcome detail (no selection)
+
+private struct WelcomeDetailView: View {
+    @EnvironmentObject private var vm: PackagesViewModel
+
+    var body: some View {
+        VStack(spacing: 28) {
+            if vm.isLoading {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text(vm.loadingStatus)
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                }
+            } else {
+                Image(systemName: "shippingbox.fill")
+                    .font(.system(size: 52))
+                    .foregroundStyle(.quaternary)
+
+                VStack(spacing: 6) {
+                    Text("\(vm.packages.count) packages installed")
+                        .font(.title3).fontWeight(.medium)
+                    if vm.staleCount > 0 {
+                        Label("\(vm.staleCount) packages unused 90+ days",
+                              systemImage: "clock.badge.exclamationmark")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
+                    }
+                    Text("\(vm.orphansToRemove.count) can be safely removed")
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 16) {
+                    ForEach(PackageSource.allCases, id: \.self) { source in
+                        let n = vm.count(for: source)
+                        if n > 0 {
+                            VStack(spacing: 4) {
+                                Image(systemName: source.icon)
+                                    .foregroundStyle(source.color)
+                                    .font(.title2)
+                                Text("\(n)")
+                                    .font(.title3).fontWeight(.semibold)
+                                Text(source.displayName)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .frame(width: 72)
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 12))
+
+                Text("Select a package to see details and manage it.")
+                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
+    }
+}
