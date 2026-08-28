@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/github/stars/canberkys/pkglens?style=flat-square&color=yellow" alt="Stars">
   </p>
 
-  <img src="Screenshots/detail.png" width="780" alt="PkgLens showing package details, reverse dependencies, and install path" />
+  <img src="Screenshots/overview.png" width="780" alt="PkgLens — 150 packages across 5 package managers" />
 </div>
 
 ---
@@ -27,7 +27,8 @@ No Electron. No web view. Pure SwiftUI.
 | | |
 |---|---|
 | **6 package managers** | Homebrew formula + cask, npm (nvm-aware), pip, Cargo, RubyGems |
-| **Update detection** | Parallel check across all managers — badge + one-click upgrade |
+| **Per-package version check** | "Check for New Version" button in each package — no need to scan everything |
+| **One-click upgrade** | Update Homebrew and npm packages directly from the detail panel |
 | **Orphan detection** | `brew leaves`-based; bulk-remove with one confirmation |
 | **Stale packages** | Flags installs untouched for 90+ days |
 | **Install path** | Exact location on disk; Reveal in Finder; lazy size calculation |
@@ -42,9 +43,9 @@ No Electron. No web view. Pure SwiftUI.
 ## Screenshots
 
 <div align="center">
-  <img src="Screenshots/filters.png" width="780" alt="PkgLens showing source filters, stale packages, and orphan detection" />
+  <img src="Screenshots/detail.png" width="780" alt="npm package selected — per-package Check for New Version and Uninstall buttons" />
   <br><br>
-  <img src="Screenshots/detail.png" width="780" alt="PkgLens showing package details, reverse dependencies, and install path" />
+  <img src="Screenshots/brew_detail.png" width="780" alt="Homebrew formula with Needed By reverse dependencies and install path" />
 </div>
 
 ---
@@ -88,16 +89,17 @@ The package managers themselves are all optional — PkgLens skips any that aren
 
 | Action | How |
 |---|---|
-| **Refresh** | ⌘R or the refresh toolbar button |
+| **Refresh** | ⌘R or the Refresh toolbar button |
 | **Filter by source** | Click any row in the Sources sidebar |
 | **Orphan / Stale view** | Toggle Quick Filters in the sidebar |
 | **Search** | Type in the search bar — matches name and description |
-| **Check for updates** | Toolbar → "Check Updates" — outdated packages get a blue ↑ badge |
-| **Upgrade a package** | Select it → click Update in the detail panel (Homebrew + npm) |
+| **Check a package version** | Select it → "Check for New Version" in the bottom action bar |
+| **Upgrade a package** | Select it → "Update" banner appears if newer version found (Homebrew + npm) |
 | **Uninstall** | Select package → Uninstall button, or right-click any row |
 | **Bulk remove orphans** | Enable Orphans filter → "Remove All Orphans" |
 | **Add a note** | Detail panel → Note field → press Return |
 | **Export** | Toolbar → Export → Markdown or JSON |
+| **Help** | Menu bar → Help |
 
 ---
 
