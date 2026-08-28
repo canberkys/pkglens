@@ -143,27 +143,6 @@ Bug reports and pull requests are welcome. Please open an issue before starting 
 
 ---
 
-## Contributors
-
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/canberkys">
-        <img src="https://github.com/canberkys.png" width="72" style="border-radius:50%" alt="canberkys"/><br/>
-        <sub><b>canberkys</b></sub>
-      </a><br/>
-      <sub>Author & maintainer</sub>
-    </td>
-    <td align="center">
-      <img src="https://avatars.githubusercontent.com/u/76263028" width="72" style="border-radius:50%" alt="Claude"/><br/>
-      <sub><b>Claude Sonnet</b></sub><br/>
-      <sub>AI pair programmer</sub>
-    </td>
-  </tr>
-</table>
-
----
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
