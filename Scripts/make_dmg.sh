@@ -34,6 +34,13 @@ cp "$BUILD/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 chmod +x "$APP/Contents/MacOS/$APP_NAME"
 cp /tmp/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+# SwiftPM resource bundle — binary uses Bundle.module which looks for this
+# in Contents/Resources at runtime; missing = immediate crash on launch.
+if [ -d "$BUILD/${APP_NAME}_${APP_NAME}.bundle" ]; then
+    echo "==> Copying resource bundle..."
+    cp -R "$BUILD/${APP_NAME}_${APP_NAME}.bundle" "$APP/Contents/Resources/"
+fi
+
 # Compile Assets.xcassets → Assets.car
 echo "==> Compiling assets..."
 xcrun actool \
@@ -87,9 +94,28 @@ PLIST
 
 echo "==> App bundle ready: $APP"
 
-# ── 4. Ad-hoc code sign ─────────────────────────────────────────────────────
-echo "==> Ad-hoc signing..."
-codesign --force --deep --sign - "$APP" 2>&1 || echo "   (codesign warning — continue)"
+# ── 4. Entitlements + ad-hoc sign ───────────────────────────────────────────
+# Non-sandboxed entitlements: required for subprocess execution (brew, npm, pip…)
+cat > /tmp/pkglens.entitlements <<ENTITLEMENTS
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <false/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
+ENTITLEMENTS
+
+echo "==> Ad-hoc signing with entitlements..."
+codesign --force --deep --sign - \
+    --entitlements /tmp/pkglens.entitlements \
+    --options runtime \
+    "$APP" 2>&1 || echo "   (codesign warning — continue)"
 
 # ── 5. Create DMG ───────────────────────────────────────────────────────────
 echo "==> Creating DMG..."
