@@ -204,8 +204,7 @@ final class PackagesViewModel: ObservableObject {
             case .brewCask:
                 _ = try await ProcessRunner.run("brew", arguments: ["upgrade", "--cask", package.name])
             case .npm:
-                let npmPath = (try? await npm.resolvedPath()) ?? "npm"
-                _ = try await ProcessRunner.run(npmPath, arguments: ["install", "-g", package.name])
+                _ = try await npm.upgrade(package)
             case .pip:
                 throw ProcessError.failed(status: 1, stderr: "pip upgrade is not supported in-app. Run: pip install --upgrade \(package.name)")
             case .gem:
@@ -245,8 +244,7 @@ final class PackagesViewModel: ObservableObject {
                 case .brewCask:
                     _ = try await ProcessRunner.run("brew", arguments: ["upgrade", "--cask", pkg.name])
                 case .npm:
-                    let path = (try? await npm.resolvedPath()) ?? "npm"
-                    _ = try await ProcessRunner.run(path, arguments: ["install", "-g", pkg.name])
+                    _ = try await npm.upgrade(pkg)
                 default:
                     break
                 }

@@ -59,6 +59,13 @@ actor NpmService {
         return dict.compactMapValues { $0["latest"] as? String }
     }
 
+    func upgrade(_ package: Package) async throws -> String {
+        let npm = try resolvedNpmPath()
+        let binDir = URL(fileURLWithPath: npm).deletingLastPathComponent().path
+        let extraEnv = ["PATH": "\(binDir):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"]
+        return try await ProcessRunner.run(npm, arguments: ["install", "-g", package.name], extraEnv: extraEnv)
+    }
+
     func uninstall(_ package: Package) async throws -> String {
         let npm = try resolvedNpmPath()
         // Put npm's own bin dir first so node resolution uses the same runtime.
