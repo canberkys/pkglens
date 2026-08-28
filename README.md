@@ -1,8 +1,24 @@
-# PkgLens
+<div align="center">
+  <img src="Screenshots/icon.png" width="128" alt="PkgLens icon" />
+  <h1>PkgLens</h1>
+  <p><strong>One place for all your package managers on macOS.</strong></p>
 
-A native macOS app for managing all your package managers in one place.
+  <p>
+    <a href="https://github.com/canberkys/pkglens/releases/latest"><img src="https://img.shields.io/github/v/release/canberkys/pkglens?style=flat-square&label=Download&color=007AFF" alt="Download"></a>
+    <img src="https://img.shields.io/badge/macOS-14%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
+    <img src="https://img.shields.io/badge/Swift-6-FA7343?style=flat-square&logo=swift&logoColor=white" alt="Swift 6">
+    <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License">
+    <img src="https://img.shields.io/github/stars/canberkys/pkglens?style=flat-square&color=yellow" alt="Stars">
+  </p>
 
-PkgLens scans Homebrew, npm, pip, Cargo, and RubyGems — shows you what each package does, flags orphans and stale installs, detects outdated versions, and lets you uninstall with one click.
+  <img src="Screenshots/detail.png" width="780" alt="PkgLens showing package details, reverse dependencies, and install path" />
+</div>
+
+---
+
+PkgLens scans **Homebrew** (formula + cask), **npm**, **pip**, **Cargo**, and **RubyGems** — and surfaces everything in a single native macOS window. See what's installed, what's outdated, what's safe to remove, and where each package lives on disk.
+
+No Electron. No web view. Pure SwiftUI.
 
 ---
 
@@ -10,35 +26,38 @@ PkgLens scans Homebrew, npm, pip, Cargo, and RubyGems — shows you what each pa
 
 | | |
 |---|---|
-| **6 package managers** | Homebrew (formula + cask), npm (nvm-aware), pip, Cargo, RubyGems |
-| **Update detection** | Parallel check across all managers; badge + one-click upgrade |
-| **Orphan detection** | Homebrew `brew leaves`-based; bulk removal with confirmation |
+| **6 package managers** | Homebrew formula + cask, npm (nvm-aware), pip, Cargo, RubyGems |
+| **Update detection** | Parallel check across all managers — badge + one-click upgrade |
+| **Orphan detection** | `brew leaves`-based; bulk-remove with one confirmation |
 | **Stale packages** | Flags installs untouched for 90+ days |
-| **Install path** | Shows exact location; Reveal in Finder; lazy disk-size calculation |
-| **Reverse deps** | "Needed By" — shows which Homebrew packages depend on this one |
-| **Notes** | Per-package notes, persisted locally |
-| **Uninstall history** | Last 5 removals shown in sidebar; full log at `~/.pkglens/history.json` |
+| **Install path** | Exact location on disk; Reveal in Finder; lazy size calculation |
+| **Reverse deps** | "Needed By" — see which packages depend on this one |
+| **Notes** | Per-package notes, stored locally in `~/.pkglens/notes.json` |
+| **Uninstall history** | Last 5 removals in the sidebar; full log at `~/.pkglens/history.json` |
 | **Export** | Markdown or JSON snapshot of all installed packages |
-| **Menu bar** | Quick stats; click any number to open the app with that filter active |
+| **Menu bar** | Live stats; click any number to open the filtered view directly |
 
 ---
 
-## Requirements
+## Screenshots
 
-- macOS 14 Sonoma or later
-- Swift 6.0+ (for building from source)
-
-The following package managers are **optional** — PkgLens simply skips any that aren't installed:
-
-- [Homebrew](https://brew.sh)
-- Node.js / npm (including [nvm](https://github.com/nvm-sh/nvm))
-- Python 3 / pip
-- [Rust](https://rustup.rs) / Cargo
-- Ruby / gem (system or Homebrew)
+<div align="center">
+  <img src="Screenshots/filters.png" width="780" alt="PkgLens showing source filters, stale packages, and orphan detection" />
+  <br><br>
+  <img src="Screenshots/detail.png" width="780" alt="PkgLens showing package details, reverse dependencies, and install path" />
+</div>
 
 ---
 
 ## Installation
+
+### Download (recommended)
+
+Grab the latest **PkgLens-1.0.0.dmg** from the [Releases](https://github.com/canberkys/pkglens/releases/latest) page.
+Open the DMG, drag PkgLens to Applications, and launch.
+
+> **Gatekeeper note:** Because PkgLens is not notarized yet, macOS may block the first launch.  
+> Right-click → Open to bypass the warning — you only need to do this once.
 
 ### Build from source
 
@@ -49,29 +68,25 @@ swift build -c release
 open .build/release/PkgLens
 ```
 
-Or open in Xcode:
-
-```bash
-open Package.swift
-```
+**Requirements:** macOS 14 Sonoma or later, Swift 6.0+.  
+The package managers themselves are all optional — PkgLens skips any that aren't installed.
 
 ---
 
 ## Usage
 
-**Scanning** — launches automatically on open; ⌘R to refresh.
-
-**Filtering** — use the sidebar to filter by package manager, or enable Orphans / Stale toggles. The search bar matches name and description.
-
-**Update check** — click "Check Updates" in the toolbar. Outdated packages get a blue ↑ badge. Click "Update" in the detail panel to upgrade (Homebrew + npm supported).
-
-**Uninstall** — select a package, click Uninstall in the detail panel, or right-click a row in the list.
-
-**Bulk remove** — enable the Orphans filter, then click "Remove All Orphans". Only Homebrew formula orphans are included (npm/pip/gem global installs are excluded — there is no reliable dependency graph for them).
-
-**Notes** — type in the Note field in the detail panel and press Return. Notes survive app restarts and are stored at `~/.pkglens/notes.json`.
-
-**Export** — toolbar → Export → choose Markdown or JSON → Save.
+| Action | How |
+|---|---|
+| **Refresh** | ⌘R or the refresh toolbar button |
+| **Filter by source** | Click any row in the Sources sidebar |
+| **Orphan / Stale view** | Toggle Quick Filters in the sidebar |
+| **Search** | Type in the search bar — matches name and description |
+| **Check for updates** | Toolbar → "Check Updates" — outdated packages get a blue ↑ badge |
+| **Upgrade a package** | Select it → click Update in the detail panel (Homebrew + npm) |
+| **Uninstall** | Select package → Uninstall button, or right-click any row |
+| **Bulk remove orphans** | Enable Orphans filter → "Remove All Orphans" |
+| **Add a note** | Detail panel → Note field → press Return |
+| **Export** | Toolbar → Export → Markdown or JSON |
 
 ---
 
@@ -83,7 +98,7 @@ open Package.swift
   notes.json     # per-package notes
 ```
 
-No data is ever sent to a network. No tracking. No telemetry.
+No data is ever sent to a server. No analytics. No telemetry. No phone-home.
 
 ---
 
@@ -96,22 +111,44 @@ Sources/PkgLens/
   Services/       BrewService, NpmService, PipService, CargoService,
                   GemService, HistoryStore, NotesStore, ProcessRunner
   ViewModels/     PackagesViewModel (@MainActor ObservableObject)
-  Views/          MainView, PackageListView, PackageDetailView,
-                  UninstallConfirmView, SettingsView
+  Views/          MainView, PackageListView, PackageDetailView, SettingsView
 ```
 
-- Swift 6 strict concurrency; all services are `actor`-isolated
-- `ProcessRunner` uses `readabilityHandler` + `DispatchGroup` to avoid the 64 KB pipe-buffer limit on large subprocess output (e.g. `brew info --json=v2`)
-- SwiftPM — no Xcode project file required
+- **Swift 6** strict concurrency — all services are `actor`-isolated
+- `ProcessRunner` uses `readabilityHandler` + `DispatchGroup` to avoid the 64 KB pipe-buffer limit on large subprocess output
+- SwiftPM only — no Xcode project file required
 
 ---
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please open an issue before large changes.
+Bug reports and pull requests are welcome. Please open an issue before starting a large change.
+
+---
+
+## Contributors
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/canberkys">
+        <img src="https://github.com/canberkys.png" width="72" style="border-radius:50%" alt="canberkys"/><br/>
+        <sub><b>canberkys</b></sub>
+      </a><br/>
+      <sub>Author & maintainer</sub>
+    </td>
+    <td align="center">
+      <img src="https://avatars.githubusercontent.com/u/76263028" width="72" style="border-radius:50%" alt="Claude"/><br/>
+      <sub><b>Claude Sonnet</b></sub><br/>
+      <sub>AI pair programmer</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- keywords: macos package manager homebrew npm pip cargo rubygems swiftui swift6 developer tools menu bar native app -->
