@@ -12,9 +12,6 @@ let package = Package(
         .executableTarget(
             name: "PkgLens",
             path: "Sources/PkgLens",
-            resources: [
-                .process("Assets.xcassets")
-            ],
             swiftSettings: [
                 .unsafeFlags(["-strict-concurrency=complete"])
             ]
