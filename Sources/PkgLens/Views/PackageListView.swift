@@ -5,6 +5,7 @@ struct PackageListView: View {
     @EnvironmentObject private var vm: PackagesViewModel
     @Binding var selectedPackage: Package?
     @State private var packageToUninstall: Package? = nil
+    @State private var uninstallError: String? = nil
 
     var body: some View {
         List(vm.filtered, selection: $selectedPackage) { pkg in
@@ -23,10 +24,21 @@ struct PackageListView: View {
             if let pkg = packageToUninstall {
                 Button("Uninstall", role: .destructive) {
                     packageToUninstall = nil
-                    Task { try? await vm.uninstall(pkg) }
+                    Task {
+                        do { try await vm.uninstall(pkg) }
+                        catch { uninstallError = error.localizedDescription }
+                    }
                 }
                 Button("Cancel", role: .cancel) { packageToUninstall = nil }
             }
+        }
+        .alert("Uninstall Failed", isPresented: Binding(
+            get: { uninstallError != nil },
+            set: { if !$0 { uninstallError = nil } }
+        )) {
+            Button("OK") { uninstallError = nil }
+        } message: {
+            Text(uninstallError ?? "")
         }
         .listStyle(.inset)
         .navigationSplitViewColumnWidth(min: 240, ideal: 320, max: 600)

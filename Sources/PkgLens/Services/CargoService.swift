@@ -22,7 +22,9 @@ actor CargoService {
     //       nextest
     private func parse(_ output: String) -> [Package] {
         var result: [Package] = []
-        let cargoHome = FileManager.default.homeDirectoryForCurrentUser.path
+        // Respect CARGO_HOME env var; default to ~/.cargo
+        let cargoHome = ProcessInfo.processInfo.environment["CARGO_HOME"]
+            ?? "\(FileManager.default.homeDirectoryForCurrentUser.path)/.cargo"
 
         for line in output.components(separatedBy: "\n") {
             if line.isEmpty { continue }
@@ -51,7 +53,7 @@ actor CargoService {
                 isOrphan: true,
                 sizeBytes: nil,
                 homepage: home,
-                installPath: "\(cargoHome)/.cargo/bin/\(name)"
+                installPath: "\(cargoHome)/bin/\(name)"
             ))
         }
         return result.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
