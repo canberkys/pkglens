@@ -7,6 +7,11 @@ actor CargoService {
         return parse(output)
     }
 
+    func upgrade(_ package: Package) async throws -> String {
+        let cargo = try resolvedCargo()
+        return try await ProcessRunner.run(cargo, arguments: ["install", package.name])
+    }
+
     func uninstall(_ package: Package) async throws -> String {
         let cargo = try resolvedCargo()
         return try await ProcessRunner.run(cargo, arguments: ["uninstall", package.name])
@@ -39,21 +44,23 @@ actor CargoService {
             let rawVer  = parts[1].hasPrefix("v") ? String(parts[1].dropFirst()) : parts[1]
             let version = rawVer.hasSuffix(":") ? String(rawVer.dropLast()) : rawVer
 
-            let desc = readCargoTomlDescription(package: name, version: version)
-            let home = URL(string: "https://crates.io/crates/\(name)")
+            let desc      = readCargoTomlDescription(package: name, version: version)
+            let home      = URL(string: "https://crates.io/crates/\(name)")
+            let binPath   = "\(cargoHome)/bin/\(name)"
+            let birthdate = (try? FileManager.default.attributesOfItem(atPath: binPath))?[.creationDate] as? Date
             result.append(Package(
                 id: "cargo-\(name)",
                 name: name,
                 version: version,
                 description: desc,
                 source: .cargo,
-                installedDate: nil,
+                installedDate: birthdate,
                 installedOnRequest: true,
                 dependencies: [],
                 isOrphan: true,
                 sizeBytes: nil,
                 homepage: home,
-                installPath: "\(cargoHome)/bin/\(name)"
+                installPath: binPath
             ))
         }
         return result.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }

@@ -13,6 +13,8 @@ enum SourceFilter: Hashable, Sendable {
     case all
     case source(PackageSource)
     case updates
+    case collection(UUID)
+    case recent   // installed in the last 7 days
 }
 
 @MainActor
@@ -28,16 +30,19 @@ final class PackagesViewModel: ObservableObject {
     @Published var sortOrder: SortOrder = .nameAsc
     @Published var isCheckingUpdates = false
     @Published var updateCount = 0
+    @Published var lastUpgradeResult: String? = nil   // persists across detail view re-renders
     @Published var notes: [String: String] = [:]
     @Published var recentRemovals: [HistoryStore.Entry] = []
+    @Published var collections: [PackageCollection] = []
 
-    private let brew      = BrewService()
-    private let npm       = NpmService()
-    private let pip       = PipService()
-    private let cargo     = CargoService()
-    private let gem       = GemService()
-    private let history   = HistoryStore()
-    private let notesStore = NotesStore()
+    private let brew            = BrewService()
+    private let npm             = NpmService()
+    private let pip             = PipService()
+    private let cargo           = CargoService()
+    private let gem             = GemService()
+    private let history         = HistoryStore()
+    private let notesStore      = NotesStore()
+    private let collectionStore = CollectionStore()
 
     var filtered: [Package] {
         var result = packages.filter { pkg in
@@ -46,19 +51,23 @@ final class PackagesViewModel: ObservableObject {
                 || pkg.description.localizedCaseInsensitiveContains(searchText)
             let matchesSource: Bool = {
                 switch selectedFilter {
-                case .all:            return true
-                case .source(let s): return pkg.source == s
-                case .updates:        return pkg.isOutdated
+                case .all:                return true
+                case .source(let s):      return pkg.source == s
+                case .updates:            return pkg.isOutdated
+                case .collection(let id): return collections.first { $0.id == id }?.packageIds.contains(pkg.id) ?? false
+                case .recent:
+                    guard let date = pkg.installedDate else { return false }
+                    return Date().timeIntervalSince(date) <= 7 * 86400
                 }
             }()
-            // Orphan/stale toggles don't narrow the Updates view — you want all
-            // outdated packages regardless of those quick filters.
+            // Orphan/stale toggles don't narrow the Updates, Collection, or Recent views.
             let matchesOrphan: Bool
             let matchesStale: Bool
-            if case .updates = selectedFilter {
+            switch selectedFilter {
+            case .updates, .collection, .recent:
                 matchesOrphan = true
                 matchesStale  = true
-            } else {
+            default:
                 matchesOrphan = !showOrphansOnly || pkg.isOrphan
                 matchesStale  = !showStaleOnly   || pkg.isStale
             }
@@ -84,8 +93,9 @@ final class PackagesViewModel: ObservableObject {
         return result
     }
 
-    var orphanCount: Int { packages.filter(\.isOrphan).count }
-    var staleCount: Int  { packages.filter(\.isStale).count }
+    var orphanCount: Int  { packages.filter(\.isOrphan).count }
+    var staleCount: Int   { packages.filter(\.isStale).count }
+    var recentCount: Int  { packages.filter { ($0.installedDate.map { Date().timeIntervalSince($0) <= 7 * 86400 }) ?? false }.count }
     func count(for source: PackageSource) -> Int { packages.filter { $0.source == source }.count }
 
     // MARK: - Load
@@ -107,10 +117,11 @@ final class PackagesViewModel: ObservableObject {
         loadingStatus = ""
         isLoading     = false
 
-        // Restore persisted notes and history on first load
+        // Restore persisted notes, history, and collections
         let allNotes = await notesStore.allNotes()
-        notes = allNotes
+        notes        = allNotes
         recentRemovals = await history.recent()
+        collections    = await collectionStore.load()
     }
 
     // MARK: - Update Detection
@@ -196,21 +207,22 @@ final class PackagesViewModel: ObservableObject {
 
     // MARK: - Upgrade
 
-    func upgrade(_ package: Package) async throws {
+    func upgrade(_ package: Package) async throws -> String {
+        let output: String
         do {
             switch package.source {
             case .brewFormula:
-                _ = try await ProcessRunner.run("brew", arguments: ["upgrade", package.name])
+                output = try await ProcessRunner.run("brew", arguments: ["upgrade", package.name])
             case .brewCask:
-                _ = try await ProcessRunner.run("brew", arguments: ["upgrade", "--cask", package.name])
+                output = try await ProcessRunner.run("brew", arguments: ["upgrade", "--cask", package.name])
             case .npm:
-                _ = try await npm.upgrade(package)
+                output = try await npm.upgrade(package)
             case .pip:
-                throw ProcessError.failed(status: 1, stderr: "pip upgrade is not supported in-app. Run: pip install --upgrade \(package.name)")
+                output = try await pip.upgrade(package)
             case .gem:
-                throw ProcessError.failed(status: 1, stderr: "gem upgrade is not supported in-app. Run: gem update \(package.name)")
+                output = try await gem.upgrade(package)
             case .cargo:
-                throw ProcessError.failed(status: 1, stderr: "cargo upgrade is not supported in-app. Run: cargo install \(package.name)")
+                output = try await cargo.upgrade(package)
             }
         } catch {
             // Always reload so the UI reflects the current on-disk state, then rethrow.
@@ -221,14 +233,71 @@ final class PackagesViewModel: ObservableObject {
         // Reload to pick up the new version on success.
         await brew.invalidateCache()
         await loadAll()
+        lastUpgradeResult = output   // store AFTER loadAll so the detail view is alive
+        return output
+    }
+
+    // MARK: - Collections
+
+    func addCollection(name: String, icon: String = "star.fill", colorName: String = "orange") async {
+        let col = PackageCollection(name: name, icon: icon, colorName: colorName)
+        collections.append(col)
+        await collectionStore.save(collections)
+    }
+
+    func updateCollectionAppearance(id: UUID, icon: String, colorName: String) async {
+        guard let idx = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[idx].icon      = icon
+        collections[idx].colorName = colorName
+        await collectionStore.save(collections)
+    }
+
+    func deleteCollection(id: UUID) async {
+        collections.removeAll { $0.id == id }
+        if case .collection(let sel) = selectedFilter, sel == id { selectedFilter = .all }
+        await collectionStore.save(collections)
+    }
+
+    func renameCollection(id: UUID, to name: String) async {
+        guard let idx = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[idx].name = name
+        await collectionStore.save(collections)
+    }
+
+    func togglePackage(_ packageId: String, in collectionId: UUID) async {
+        guard let idx = collections.firstIndex(where: { $0.id == collectionId }) else { return }
+        if collections[idx].packageIds.contains(packageId) {
+            collections[idx].packageIds.removeAll { $0 == packageId }
+        } else {
+            collections[idx].packageIds.append(packageId)
+        }
+        await collectionStore.save(collections)
+    }
+
+    func isPackage(_ packageId: String, inCollection collectionId: UUID) -> Bool {
+        collections.first { $0.id == collectionId }?.packageIds.contains(packageId) ?? false
+    }
+
+    func isPackageInAnyCollection(_ packageId: String) -> Bool {
+        collections.contains { $0.packageIds.contains(packageId) }
+    }
+
+    func collectionCount(for id: UUID) -> Int {
+        guard let col = collections.first(where: { $0.id == id }) else { return 0 }
+        return packages.filter { col.packageIds.contains($0.id) }.count
+    }
+
+    // MARK: - Last Used (Brew only, via Spotlight)
+
+    func lastUsedDate(for package: Package) async -> Date? {
+        guard package.source == .brewFormula else { return nil }
+        return await brew.lastUsedDate(for: package)
     }
 
     // MARK: - Bulk Upgrade
 
     var upgradeAllEligible: [Package] {
-        packages.filter {
-            $0.isOutdated && ($0.source == .brewFormula || $0.source == .brewCask || $0.source == .npm)
-        }
+        packages.filter(\.isOutdated)
     }
 
     func upgradeAll() async {
@@ -243,10 +312,10 @@ final class PackagesViewModel: ObservableObject {
                     _ = try await ProcessRunner.run("brew", arguments: ["upgrade", pkg.name])
                 case .brewCask:
                     _ = try await ProcessRunner.run("brew", arguments: ["upgrade", "--cask", pkg.name])
-                case .npm:
-                    _ = try await npm.upgrade(pkg)
-                default:
-                    break
+                case .npm:   _ = try await npm.upgrade(pkg)
+                case .pip:   _ = try await pip.upgrade(pkg)
+                case .gem:   _ = try await gem.upgrade(pkg)
+                case .cargo: _ = try await cargo.upgrade(pkg)
                 }
             } catch {
                 errors.append("\(pkg.name): \(error.localizedDescription)")
@@ -288,6 +357,23 @@ final class PackagesViewModel: ObservableObject {
     }
 
     // MARK: - Export
+
+    func exportBrewfile() -> String {
+        var lines = ["# Generated by PkgLens on \(Date().formatted(date: .abbreviated, time: .omitted))", ""]
+        let formulae = packages.filter { $0.source == .brewFormula }
+        let casks    = packages.filter { $0.source == .brewCask }
+        if !formulae.isEmpty {
+            lines.append("# Formulae")
+            for p in formulae { lines.append("brew \"\(p.name)\"") }
+            lines.append("")
+        }
+        if !casks.isEmpty {
+            lines.append("# Casks")
+            for p in casks { lines.append("cask \"\(p.name)\"") }
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
 
     func exportMarkdown() -> String {
         var lines = ["# PkgLens Export", "", "Generated: \(Date().formatted())", ""]

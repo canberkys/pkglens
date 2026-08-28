@@ -43,4 +43,23 @@ struct Package: Identifiable, Hashable, Sendable {
         guard let latest = latestVersion, !latest.isEmpty else { return false }
         return latest != version
     }
+
+    // Constructs a source-appropriate URL for release notes / changelog.
+    var changelogURL: URL? {
+        switch source {
+        case .npm:
+            let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
+            return URL(string: "https://www.npmjs.com/package/\(encoded)?activeTab=versions")
+        case .brewFormula:
+            return URL(string: "https://formulae.brew.sh/formula/\(name)")
+        case .brewCask:
+            return URL(string: "https://formulae.brew.sh/cask/\(name)")
+        case .pip:
+            return URL(string: "https://pypi.org/project/\(name)/#history")
+        case .gem:
+            return URL(string: "https://rubygems.org/gems/\(name)/versions")
+        case .cargo:
+            return URL(string: "https://crates.io/crates/\(name)/versions")
+        }
+    }
 }

@@ -9,9 +9,13 @@ struct PackageListView: View {
 
     var body: some View {
         List(vm.filtered, selection: $selectedPackage) { pkg in
-            PackageRow(package: pkg, hasNote: vm.notes[pkg.id] != nil)
-                .tag(pkg)
-                .contextMenu { rowContextMenu(for: pkg) }
+            PackageRow(
+                package: pkg,
+                hasNote: vm.notes[pkg.id] != nil,
+                isStarred: vm.isPackageInAnyCollection(pkg.id)
+            )
+            .tag(pkg)
+            .contextMenu { rowContextMenu(for: pkg) }
         }
         .confirmationDialog(
             packageToUninstall.map { "Uninstall \"\($0.name)\"?" } ?? "Uninstall?",
@@ -42,6 +46,7 @@ struct PackageListView: View {
         }
         .listStyle(.inset)
         .navigationSplitViewColumnWidth(min: 240, ideal: 320, max: 600)
+        .safeAreaInset(edge: .top, spacing: 0) { listHeader }
         .overlay {
             if vm.isLoading && vm.packages.isEmpty {
                 ProgressView(vm.loadingStatus.isEmpty ? "Loading…" : vm.loadingStatus)
@@ -56,6 +61,8 @@ struct PackageListView: View {
             } else if vm.filtered.isEmpty && !vm.packages.isEmpty {
                 if case .updates = vm.selectedFilter {
                     updatesEmptyState
+                } else if case .recent = vm.selectedFilter {
+                    recentEmptyState
                 } else {
                     filtersEmptyState
                 }
@@ -63,6 +70,24 @@ struct PackageListView: View {
         }
         .navigationTitle("Packages")
         .navigationSubtitle("\(vm.filtered.count) of \(vm.packages.count)")
+    }
+
+    private var listHeader: some View {
+        HStack {
+            Spacer()
+            Picker("Sort", selection: $vm.sortOrder) {
+                ForEach(SortOrder.allCases, id: \.self) { order in
+                    Text(order.rawValue).tag(order)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+            .labelsHidden()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
     }
 
     // Shown when active filters produce zero results.
@@ -110,6 +135,26 @@ struct PackageListView: View {
         .background(.background)
     }
 
+    private var recentEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 36))
+                .foregroundStyle(.purple)
+
+            VStack(spacing: 4) {
+                Text("No Recent Installs")
+                    .font(.headline)
+                Text("Packages installed in the last 7 days will appear here.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
+    }
+
     private var activeFilterDescription: String {
         var parts: [String] = []
         if case .source(let s) = vm.selectedFilter { parts.append("Source: \(s.displayName)") }
@@ -142,6 +187,22 @@ struct PackageListView: View {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
             }
         }
+
+        if !vm.collections.isEmpty {
+            Divider()
+            ForEach(vm.collections) { col in
+                Button {
+                    Task { await vm.togglePackage(pkg.id, in: col.id) }
+                } label: {
+                    if vm.isPackage(pkg.id, inCollection: col.id) {
+                        Label("Remove from \"\(col.name)\"", systemImage: "checkmark")
+                    } else {
+                        Label("Add to \"\(col.name)\"", systemImage: "star")
+                    }
+                }
+            }
+        }
+
         Divider()
         Button(role: .destructive) {
             packageToUninstall = pkg
@@ -155,15 +216,11 @@ struct PackageListView: View {
 
 struct PackageRow: View {
     let package: Package
-    var hasNote: Bool = false
+    var hasNote: Bool    = false
+    var isStarred: Bool  = false
 
     var body: some View {
         HStack(spacing: 10) {
-            // Colored source stripe
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(package.source.color)
-                .frame(width: 3, height: 34)
-
             Image(systemName: package.source.icon)
                 .frame(width: 18)
                 .foregroundStyle(package.source.color.opacity(0.85))
@@ -215,6 +272,11 @@ struct PackageRow: View {
             Spacer(minLength: 4)
 
             HStack(spacing: 4) {
+                if isStarred {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange.opacity(0.8))
+                }
                 if hasNote {
                     Image(systemName: "bubble.left.fill")
                         .font(.caption2)

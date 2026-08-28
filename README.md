@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/github/stars/canberkys/pkglens?style=flat-square&color=yellow" alt="Stars">
   </p>
 
-  <img src="Screenshots/overview.png" width="780" alt="PkgLens — 150 packages across 5 package managers" />
+  <img src="Screenshots/overview.png" width="780" alt="PkgLens — package manager dashboard with update detection" />
 </div>
 
 ---
@@ -27,10 +27,14 @@ No Electron. No web view. Pure SwiftUI.
 | | |
 |---|---|
 | **6 package managers** | Homebrew formula + cask, npm (nvm-aware), pip, Cargo, RubyGems |
-| **Per-package version check** | "Check for New Version" button in each package — no need to scan everything |
-| **One-click upgrade** | Update Homebrew and npm packages directly from the detail panel |
+| **Dashboard strip** | Live totals — Total, Updates, New (7 days), Orphans — each tile navigates instantly |
+| **Per-package version check** | "Check for New Version" button per package; or scan all at once |
+| **One-click upgrade** | Update any package directly from the detail panel; "Update All" for bulk upgrades |
+| **Changelog & release notes** | Inline version history fetched from GitHub releases or registry APIs — no browser needed |
+| **Collections** | Star packages into named groups with custom icons and colors |
 | **Orphan detection** | `brew leaves`-based; bulk-remove with one confirmation |
 | **Stale packages** | Flags installs untouched for 90+ days |
+| **Recently installed** | "New" filter shows packages added in the last 7 days |
 | **Install path** | Exact location on disk; Reveal in Finder; lazy size calculation |
 | **Reverse deps** | "Needed By" — see which packages depend on this one |
 | **Notes** | Per-package notes, stored locally in `~/.pkglens/notes.json` |
@@ -43,9 +47,9 @@ No Electron. No web view. Pure SwiftUI.
 ## Screenshots
 
 <div align="center">
-  <img src="Screenshots/detail.png" width="780" alt="npm package selected — per-package Check for New Version and Uninstall buttons" />
+  <img src="Screenshots/detail.png" width="780" alt="Update detection — available updates listed with one-click upgrade" />
   <br><br>
-  <img src="Screenshots/brew_detail.png" width="780" alt="Homebrew formula with Needed By reverse dependencies and install path" />
+  <img src="Screenshots/brew_detail.png" width="780" alt="Package detail — update banner, install path, notes, version history" />
 </div>
 
 ---
@@ -54,7 +58,7 @@ No Electron. No web view. Pure SwiftUI.
 
 ### Download (recommended)
 
-Grab the latest **PkgLens-1.0.0.dmg** from the [Releases](https://github.com/canberkys/pkglens/releases/latest) page.
+Grab the latest **PkgLens-1.0.2.dmg** from the [Releases](https://github.com/canberkys/pkglens/releases/latest) page.
 Open the DMG, drag PkgLens to Applications.
 
 > **First-launch on macOS 14 / 15**

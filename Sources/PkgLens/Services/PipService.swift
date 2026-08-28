@@ -18,22 +18,31 @@ actor PipService {
         let info = await loadDescriptions(for: pkgs.map(\.name), pip: pip)
 
         return pkgs.map { p in
-            let show = info[p.name.lowercased()]
+            let show     = info[p.name.lowercased()]
+            let location = show?.location
+            let pkgPath  = location.map { "\($0)/\(p.name)" }
+            let birthdate: Date? = pkgPath.flatMap {
+                (try? FileManager.default.attributesOfItem(atPath: $0))?[.creationDate] as? Date
+            }
             return Package(
                 id: "pip-\(p.name)",
                 name: p.name,
                 version: p.version,
                 description: show?.summary ?? "",
                 source: .pip,
-                installedDate: nil,
+                installedDate: birthdate,
                 installedOnRequest: true,
                 dependencies: [],
                 isOrphan: true,
                 sizeBytes: nil,
                 homepage: show?.homepage ?? URL(string: "https://pypi.org/project/\(p.name)/"),
-                installPath: show?.location.map { "\($0)/\(p.name)" }
+                installPath: pkgPath
             )
         }
+    }
+
+    func upgrade(_ package: Package) async throws -> String {
+        return try await ProcessRunner.run(resolvedPip(), arguments: ["install", "--upgrade", package.name])
     }
 
     func uninstall(_ package: Package) async throws -> String {

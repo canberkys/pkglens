@@ -47,11 +47,11 @@ actor NpmService {
     func checkUpdates() async throws -> [String: String] {
         let npm = try resolvedNpmPath()
         let binDir = URL(fileURLWithPath: npm).deletingLastPathComponent().path
-        let extraEnv = ["PATH": "\(binDir):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"]
         // npm outdated exits with code 1 when outdated packages exist; allowNonZeroExit captures stdout anyway.
         let output = try await ProcessRunner.run(
             npm, arguments: ["outdated", "-g", "--json"],
-            extraEnv: extraEnv, allowNonZeroExit: true
+            allowNonZeroExit: true,
+            environment: minimalNpmEnv(binDir: binDir)
         )
         guard let data = output.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
@@ -62,16 +62,40 @@ actor NpmService {
     func upgrade(_ package: Package) async throws -> String {
         let npm = try resolvedNpmPath()
         let binDir = URL(fileURLWithPath: npm).deletingLastPathComponent().path
-        let extraEnv = ["PATH": "\(binDir):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"]
-        return try await ProcessRunner.run(npm, arguments: ["install", "-g", package.name], extraEnv: extraEnv)
+        // @latest forces a registry lookup rather than npm's local cached resolution.
+        let output = try await ProcessRunner.run(
+            npm,
+            arguments: ["install", "-g", "\(package.name)@latest"],
+            environment: minimalNpmEnv(binDir: binDir)
+        )
+        // Verify the on-disk version changed; include it in the return so the caller can show it.
+        let pkgJsonURL = URL(fileURLWithPath: npm)
+            .deletingLastPathComponent()           // bin
+            .deletingLastPathComponent()           // node root
+            .appendingPathComponent("lib/node_modules")
+        let parts = package.name.split(separator: "/", maxSplits: 1).map(String.init)
+        let pkgDir: URL
+        if parts.count == 2 {
+            pkgDir = pkgJsonURL.appendingPathComponent(parts[0]).appendingPathComponent(parts[1])
+        } else {
+            pkgDir = pkgJsonURL.appendingPathComponent(package.name)
+        }
+        var installedVersion = "unknown"
+        if let data = try? Data(contentsOf: pkgDir.appendingPathComponent("package.json")),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let v = json["version"] as? String {
+            installedVersion = v
+        }
+        return "installed \(installedVersion)\n\(output)"
     }
 
     func uninstall(_ package: Package) async throws -> String {
         let npm = try resolvedNpmPath()
-        // Put npm's own bin dir first so node resolution uses the same runtime.
         let binDir = URL(fileURLWithPath: npm).deletingLastPathComponent().path
-        let extraEnv = ["PATH": "\(binDir):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"]
-        return try await ProcessRunner.run(npm, arguments: ["uninstall", "-g", package.name], extraEnv: extraEnv)
+        return try await ProcessRunner.run(
+            npm, arguments: ["uninstall", "-g", package.name],
+            environment: minimalNpmEnv(binDir: binDir)
+        )
     }
 
     // Reads a package's metadata from its local package.json (no network call).
@@ -85,6 +109,7 @@ actor NpmService {
         let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
         let home: URL? = (json["homepage"] as? String).flatMap { URL(string: $0) }
             ?? URL(string: "https://www.npmjs.com/package/\(encoded)")
+        let birthdate = (try? FileManager.default.attributesOfItem(atPath: dir.path))?[.creationDate] as? Date
 
         return Package(
             id: "npm-\(name)",
@@ -92,7 +117,7 @@ actor NpmService {
             version: version,
             description: desc,
             source: .npm,
-            installedDate: nil,
+            installedDate: birthdate,
             installedOnRequest: true,
             dependencies: [],
             isOrphan: true,
@@ -103,6 +128,22 @@ actor NpmService {
     }
 
     func resolvedPath() throws -> String { try resolvedNpmPath() }
+
+    // Returns a minimal environment for npm subprocesses.
+    // Using ProcessInfo.processInfo.environment as a base risks inheriting
+    // npm_config_prefix (or similar) from the parent process, which can redirect
+    // `npm install -g` to a different prefix than the one the binary itself uses.
+    private func minimalNpmEnv(binDir: String) -> [String: String] {
+        let penv = ProcessInfo.processInfo.environment
+        var env: [String: String] = [
+            "PATH": "\(binDir):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+            "HOME": penv["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path
+        ]
+        // Some network stacks need TMPDIR; pass it through if set.
+        if let tmp = penv["TMPDIR"] { env["TMPDIR"] = tmp }
+        if let user = penv["USER"]  { env["USER"]  = user }
+        return env
+    }
 
     // Searches PATH entries, nvm directory, and static locations for the npm binary.
     private func resolvedNpmPath() throws -> String {

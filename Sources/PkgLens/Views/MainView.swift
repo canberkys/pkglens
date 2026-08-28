@@ -6,6 +6,7 @@ struct MainView: View {
     @State private var selectedPackage: Package?
     @State private var showExportPicker = false
     @State private var showBulkRemoveConfirm = false
+    @State private var isSearchActive = false
 
     var body: some View {
         NavigationSplitView {
@@ -25,9 +26,27 @@ struct MainView: View {
                     .environmentObject(vm)
             }
         }
-        .searchable(text: $vm.searchText, placement: .toolbar, prompt: "Search packages…")
+        .searchable(text: $vm.searchText, isPresented: $isSearchActive, placement: .toolbar, prompt: "Search packages…")
+        // ⌘F — toggles search: activates when inactive, deactivates+clears when active.
+        .background {
+            Button("") {
+                if isSearchActive {
+                    vm.searchText  = ""
+                    isSearchActive = false
+                } else {
+                    isSearchActive = true
+                }
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+        }
         .toolbar { ToolbarItems(onExport: { showExportPicker = true }) }
         .task { await vm.loadAll() }
+        .onChange(of: vm.selectedFilter) { _, _ in
+            vm.searchText  = ""
+            isSearchActive = false
+        }
         .onChange(of: vm.packages) {
             // Package is a struct — equality breaks when latestVersion mutates after
             // checkVersion(). Match by stable ID and propagate the updated value so
@@ -68,10 +87,20 @@ struct MainView: View {
 private struct SidebarView: View {
     @EnvironmentObject private var vm: PackagesViewModel
     @Binding var showBulkRemoveConfirm: Bool
-    @State private var showUpdateAllConfirm = false
+    @State private var showUpdateAllConfirm  = false
+    @State private var showCollectionEditor  = false
+    @State private var collectionToEdit: PackageCollection? = nil
 
     var body: some View {
         List(selection: $vm.selectedFilter) {
+            Section {
+                SidebarDashboardStrip()
+                    .selectionDisabled()
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 4, trailing: 8))
+            }
+
             Section("Sources") {
                 SidebarRow(label: "All Packages",
                            icon: "square.grid.2x2.fill",
@@ -171,6 +200,40 @@ private struct SidebarView: View {
                 }
             }
 
+            Section {
+                ForEach(vm.collections) { col in
+                    SidebarRow(
+                        label: col.name,
+                        icon: col.icon,
+                        color: .pkgLensCollection(col.colorName),
+                        count: vm.collectionCount(for: col.id)
+                    )
+                    .tag(SourceFilter.collection(col.id))
+                    .contextMenu {
+                        Button("Edit…") {
+                            collectionToEdit = col
+                            showCollectionEditor = true
+                        }
+                        Button("Delete", role: .destructive) {
+                            Task { await vm.deleteCollection(id: col.id) }
+                        }
+                    }
+                }
+
+                Button {
+                    collectionToEdit = nil
+                    showCollectionEditor = true
+                } label: {
+                    Label("New Collection…", systemImage: "plus")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 4)
+            } header: {
+                Text("My Collections")
+            }
+
             if !vm.recentRemovals.isEmpty {
                 Section("Recent Removals") {
                     ForEach(vm.recentRemovals) { entry in
@@ -185,6 +248,10 @@ private struct SidebarView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showCollectionEditor) {
+            CollectionEditorSheet(editingCollection: collectionToEdit)
+                .environmentObject(vm)
         }
         .listStyle(.sidebar)
         .navigationTitle("PkgLens")
@@ -220,6 +287,62 @@ private struct SidebarRow: View {
     }
 }
 
+// MARK: - Dashboard Strip
+
+private struct SidebarDashboardStrip: View {
+    @EnvironmentObject private var vm: PackagesViewModel
+
+    var body: some View {
+        HStack(spacing: 0) {
+            statCell(value: vm.packages.count, label: "Total", color: .secondary) {
+                vm.selectedFilter  = .all
+                vm.showOrphansOnly = false
+                vm.showStaleOnly   = false
+            }
+            sep()
+            statCell(value: vm.updateCount, label: "Updates", color: .blue) {
+                vm.selectedFilter = .updates
+            }
+            sep()
+            statCell(value: vm.recentCount, label: "New", color: .purple) {
+                vm.selectedFilter = .recent
+            }
+            sep()
+            statCell(value: vm.orphanCount, label: "Orphans", color: .green) {
+                vm.selectedFilter  = .all
+                vm.showOrphansOnly = true
+                vm.showStaleOnly   = false
+            }
+        }
+        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func sep() -> some View {
+        Rectangle()
+            .fill(.separator)
+            .frame(width: 0.5, height: 26)
+    }
+
+    private func statCell(
+        value: Int, label: String, color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 1) {
+                Text("\(value)")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(value > 0 ? color : Color.secondary)
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Toolbar
 
 private struct ToolbarItems: ToolbarContent {
@@ -248,16 +371,7 @@ private struct ToolbarItems: ToolbarContent {
             .help("Refresh all packages (⌘R)")
         }
 
-        ToolbarItem(placement: .primaryAction) {
-            Picker("Sort", selection: $vm.sortOrder) {
-                ForEach(SortOrder.allCases, id: \.self) { order in
-                    Text(order.rawValue).tag(order)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
-            .help("Sort order")
-        }
+
     }
 }
 
@@ -376,6 +490,7 @@ private struct ExportSheet: View {
     enum ExportFormat: String, CaseIterable {
         case markdown = "Markdown"
         case json     = "JSON"
+        case brewfile = "Brewfile"
     }
 
     var body: some View {
@@ -423,22 +538,135 @@ private struct ExportSheet: View {
 
     private func saveFile() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = format == .markdown ? "packages.md" : "packages.json"
-        panel.allowedContentTypes = format == .markdown ? [.text] : [.json]
+        switch format {
+        case .markdown: panel.nameFieldStringValue = "packages.md";  panel.allowedContentTypes = [.text]
+        case .json:     panel.nameFieldStringValue = "packages.json"; panel.allowedContentTypes = [.json]
+        case .brewfile: panel.nameFieldStringValue = "Brewfile";      panel.allowedContentTypes = [.text]
+        }
         panel.begin { response in
             // User cancelled — keep the sheet open so they can retry or cancel.
             guard response == .OK, let url = panel.url else { return }
             do {
-                if format == .markdown {
-                    try vm.exportMarkdown().write(to: url, atomically: true, encoding: .utf8)
-                } else {
-                    try vm.exportJSON().write(to: url)
+                switch format {
+                case .markdown: try vm.exportMarkdown().write(to: url, atomically: true, encoding: .utf8)
+                case .json:     try vm.exportJSON().write(to: url)
+                case .brewfile: try vm.exportBrewfile().write(to: url, atomically: true, encoding: .utf8)
                 }
-                // Only dismiss on a successful write.
                 dismiss()
             } catch {
                 writeError = error.localizedDescription
             }
+        }
+    }
+}
+
+// MARK: - Collection Editor Sheet
+
+private struct CollectionEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var vm: PackagesViewModel
+
+    let editingCollection: PackageCollection?
+
+    @State private var name            = ""
+    @State private var selectedSymbol  = "star.fill"
+    @State private var selectedColor   = "orange"
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Live icon preview
+            ZStack {
+                Circle()
+                    .fill(Color.pkgLensCollection(selectedColor).opacity(0.15))
+                    .frame(width: 60, height: 60)
+                Image(systemName: selectedSymbol)
+                    .font(.system(size: 24))
+                    .foregroundStyle(Color.pkgLensCollection(selectedColor))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Name")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("Collection name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { commitAction() }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Icon")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 40, maximum: 48), spacing: 8)],
+                    spacing: 8
+                ) {
+                    ForEach(CollectionIconOption.all) { opt in
+                        Button {
+                            selectedSymbol = opt.symbol
+                            selectedColor  = opt.color
+                        } label: {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(selectedSymbol == opt.symbol
+                                          ? AnyShapeStyle(Color.pkgLensCollection(opt.color).opacity(0.18))
+                                          : AnyShapeStyle(.fill.tertiary))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(
+                                                selectedSymbol == opt.symbol
+                                                    ? Color.pkgLensCollection(opt.color)
+                                                    : Color.clear,
+                                                lineWidth: 1.5
+                                            )
+                                    )
+                                Image(systemName: opt.symbol)
+                                    .font(.system(size: 17))
+                                    .foregroundStyle(Color.pkgLensCollection(opt.color))
+                            }
+                            .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .help(opt.symbol)
+                    }
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .controlSize(.large)
+
+                Button(editingCollection == nil ? "Create" : "Save") { commitAction() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .controlSize(.large)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 440)
+        .onAppear {
+            if let col = editingCollection {
+                name           = col.name
+                selectedSymbol = col.icon
+                selectedColor  = col.colorName
+            }
+        }
+    }
+
+    private func commitAction() {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        Task {
+            if let col = editingCollection {
+                await vm.renameCollection(id: col.id, to: trimmed)
+                await vm.updateCollectionAppearance(id: col.id, icon: selectedSymbol, colorName: selectedColor)
+            } else {
+                await vm.addCollection(name: trimmed, icon: selectedSymbol, colorName: selectedColor)
+            }
+            dismiss()
         }
     }
 }
@@ -465,6 +693,12 @@ private struct WelcomeDetailView: View {
                 VStack(spacing: 6) {
                     Text("\(vm.packages.count) packages installed")
                         .font(.title3).fontWeight(.medium)
+                    if vm.updateCount > 0 {
+                        Label("\(vm.updateCount) updates available",
+                              systemImage: "arrow.up.circle.fill")
+                            .foregroundStyle(.blue)
+                            .font(.callout)
+                    }
                     if vm.staleCount > 0 {
                         Label("\(vm.staleCount) packages unused 90+ days",
                               systemImage: "clock.badge.exclamationmark")

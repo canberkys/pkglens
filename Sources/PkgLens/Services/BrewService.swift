@@ -118,6 +118,32 @@ actor BrewService {
         cachedLeaves = nil
     }
 
+    // Queries Spotlight metadata for when a brew-installed binary was last launched.
+    // Tries the Homebrew bin symlink first, then the direct Cellar binary.
+    // Returns nil if Spotlight hasn't indexed the binary or the package has no binary.
+    func lastUsedDate(for package: Package) async -> Date? {
+        let fm = FileManager.default
+        // Candidate paths: opt/homebrew/bin/<name>, then <cellar>/<version>/bin/<name>
+        var candidates: [String] = ["\(prefix)/bin/\(package.name)"]
+        if let cellar = package.installPath {
+            candidates.append("\(cellar)/bin/\(package.name)")
+        }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+        for path in candidates {
+            guard fm.fileExists(atPath: path) else { continue }
+            let output = (try? await ProcessRunner.run(
+                "/usr/bin/mdls",
+                arguments: ["-raw", "-name", "kMDItemLastUsedDate", path]
+            )) ?? ""
+            let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed != "(null)", !trimmed.isEmpty, let date = fmt.date(from: trimmed) {
+                return date
+            }
+        }
+        return nil
+    }
+
     func usedBy(_ name: String) async throws -> [String] {
         let output = try await ProcessRunner.run("brew", arguments: ["uses", "--installed", name])
         return output.split(separator: "\n")

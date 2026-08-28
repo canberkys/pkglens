@@ -40,7 +40,11 @@ struct ProcessRunner: Sendable {
         _ command: String,
         arguments: [String],
         extraEnv: [String: String] = [:],
-        allowNonZeroExit: Bool = false
+        allowNonZeroExit: Bool = false,
+        // When non-nil, this environment is used AS-IS (no ProcessInfo merging).
+        // Use this for tools like npm where inherited npm_config_* vars can redirect
+        // installs to the wrong prefix.
+        environment: [String: String]? = nil
     ) async throws -> String {
         // Accept absolute paths directly; otherwise resolve via known locations.
         let resolved: String
@@ -55,12 +59,18 @@ struct ProcessRunner: Sendable {
             process.executableURL = URL(fileURLWithPath: resolved)
             process.arguments = arguments
 
-            // Prepend Homebrew paths but keep the parent's PATH so tools like nvm,
-            // pyenv, and user-local binaries are discoverable.
-            var env = ProcessInfo.processInfo.environment
-            let parentPath = env["PATH"] ?? ""
-            env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\(parentPath)"
-            for (k, v) in extraEnv { env[k] = v }
+            let env: [String: String]
+            if let explicitEnv = environment {
+                env = explicitEnv
+            } else {
+                // Prepend Homebrew paths but keep the parent's PATH so tools like nvm,
+                // pyenv, and user-local binaries are discoverable.
+                var merged = ProcessInfo.processInfo.environment
+                let parentPath = merged["PATH"] ?? ""
+                merged["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\(parentPath)"
+                for (k, v) in extraEnv { merged[k] = v }
+                env = merged
+            }
             process.environment = env
 
             let stdoutPipe = Pipe()

@@ -11,6 +11,11 @@ actor GemService {
         return parse(output, gemdir: gemdir)
     }
 
+    func upgrade(_ package: Package) async throws -> String {
+        let gem = try resolvedGem()
+        return try await ProcessRunner.run(gem, arguments: ["update", package.name])
+    }
+
     func uninstall(_ package: Package) async throws -> String {
         let gem = try resolvedGem()
         return try await ProcessRunner.run(gem, arguments: ["uninstall", package.name, "-x", "--force"])
@@ -66,19 +71,21 @@ actor GemService {
             // Strip platform annotation: "1.17.0 x86_64-darwin" → "1.17.0"
             if let spaceIdx = version.firstIndex(of: " ") { version = String(version[..<spaceIdx]) }
 
+            let gemPath   = "\(gemdir)/gems/\(name)-\(version)"
+            let birthdate = (try? FileManager.default.attributesOfItem(atPath: gemPath))?[.creationDate] as? Date
             result.append(Package(
                 id: "gem-\(name)",
                 name: name,
                 version: version,
                 description: "",
                 source: .gem,
-                installedDate: nil,
+                installedDate: birthdate,
                 installedOnRequest: true,
                 dependencies: [],
                 isOrphan: true,
                 sizeBytes: nil,
                 homepage: URL(string: "https://rubygems.org/gems/\(name)"),
-                installPath: "\(gemdir)/gems/\(name)-\(version)"
+                installPath: gemPath
             ))
         }
         return result.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
