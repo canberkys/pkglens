@@ -4,6 +4,7 @@ actor GemService {
     private var cachedGemDir: String?
 
     func loadInstalledPackages() async throws -> [Package] {
+        cachedGemDir = nil          // always re-resolve; stale if user switched Ruby versions
         let gem    = try resolvedGem()
         let gemdir = try await resolvedGemDir(gem: gem)
         let output = try await ProcessRunner.run(gem, arguments: ["list", "--local"])
@@ -58,10 +59,12 @@ actor GemService {
                     .first?
                     .trimmingCharacters(in: .whitespaces) ?? "unknown"
             )
-            // Strip trailing ")" left over for single-version gems: "1.0.0)"
+            // Strip trailing ")" for single-version gems: "1.0.0)"
             if version.hasSuffix(")") { version = String(version.dropLast()).trimmingCharacters(in: .whitespaces) }
             // Strip "default: " prefix for system gems: "default: 1.0.0" → "1.0.0"
             if version.hasPrefix("default: ") { version = String(version.dropFirst(9)) }
+            // Strip platform annotation: "1.17.0 x86_64-darwin" → "1.17.0"
+            if let spaceIdx = version.firstIndex(of: " ") { version = String(version[..<spaceIdx]) }
 
             result.append(Package(
                 id: "gem-\(name)",

@@ -21,7 +21,14 @@ struct PackageDetailView: View {
                     .padding(24)
 
                 if package.isOutdated, let latest = package.latestVersion {
-                    UpdateAvailableBanner(latestVersion: latest, isUpgrading: isUpgrading) {
+                    let canUpgrade = package.source == .brewFormula
+                                  || package.source == .brewCask
+                                  || package.source == .npm
+                    UpdateAvailableBanner(
+                        latestVersion: latest,
+                        isUpgrading: isUpgrading,
+                        canUpgrade: canUpgrade
+                    ) {
                         Task { await performUpgrade() }
                     }
                     .padding(.horizontal, 24)
@@ -207,6 +214,7 @@ private struct HeaderSection: View {
 private struct UpdateAvailableBanner: View {
     let latestVersion: String
     let isUpgrading: Bool
+    var canUpgrade: Bool = true
     let onUpgrade: () -> Void
 
     var body: some View {
@@ -216,17 +224,25 @@ private struct UpdateAvailableBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Update available: \(latestVersion)")
                     .fontWeight(.medium)
-                Text("A newer version is ready to install.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if canUpgrade {
+                    Text("A newer version is ready to install.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Update via your package manager — in-app update not supported for this source.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
-            if isUpgrading {
-                ProgressView().controlSize(.small)
-            } else {
-                Button("Update", action: onUpgrade)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+            if canUpgrade {
+                if isUpgrading {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("Update", action: onUpgrade)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
         }
         .padding(12)

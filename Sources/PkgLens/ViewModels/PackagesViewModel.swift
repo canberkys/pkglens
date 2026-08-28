@@ -168,8 +168,12 @@ final class PackagesViewModel: ObservableObject {
             case .npm:
                 let npmPath = (try? await npm.resolvedPath()) ?? "npm"
                 _ = try await ProcessRunner.run(npmPath, arguments: ["install", "-g", package.name])
-            default:
-                break
+            case .pip:
+                throw ProcessError.failed(status: 1, stderr: "pip upgrade is not supported in-app. Run: pip install --upgrade \(package.name)")
+            case .gem:
+                throw ProcessError.failed(status: 1, stderr: "gem upgrade is not supported in-app. Run: gem update \(package.name)")
+            case .cargo:
+                throw ProcessError.failed(status: 1, stderr: "cargo upgrade is not supported in-app. Run: cargo install \(package.name)")
             }
         } catch {
             // Always reload so the UI reflects the current on-disk state, then rethrow.

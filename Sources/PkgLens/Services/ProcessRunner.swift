@@ -14,6 +14,13 @@ enum ProcessError: Error, LocalizedError {
     }
 }
 
+// Sendable box for Process — lets us capture it in @Sendable closures (e.g. watchdog).
+private final class ProcessBox: @unchecked Sendable {
+    let process: Process
+    init(_ p: Process) { process = p }
+    func terminate() { process.terminate() }
+}
+
 // Thread-safe accumulator for pipe data to satisfy Swift 6 sendability checks.
 private final class DataAccumulator: @unchecked Sendable {
     private let lock = NSLock()
@@ -89,6 +96,7 @@ struct ProcessRunner: Sendable {
             }
 
             process.terminationHandler = { p in
+                // Watchdog fires later if scheduled — terminate() on an exited process is a no-op.
                 group.notify(queue: .global(qos: .userInitiated)) {
                     if p.terminationStatus == 0 || allowNonZeroExit {
                         continuation.resume(returning: outAcc.string)
@@ -103,7 +111,16 @@ struct ProcessRunner: Sendable {
 
             do {
                 try process.run()
+                // 60-second watchdog: scheduled only after successful launch so that
+                // a never-started process never receives a stray terminate() call.
+                let box = ProcessBox(process)
+                DispatchQueue.global().asyncAfter(deadline: .now() + 60) {
+                    box.terminate()
+                }
             } catch {
+                // Clear handlers so the pipes close and the DispatchGroup drains.
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
                 continuation.resume(throwing: error)
             }
         }
