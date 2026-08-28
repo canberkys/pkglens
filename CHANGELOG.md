@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.2] — 2026-08-28
+
+### Added
+
+- **Dashboard strip** — four tappable stat tiles (Total, Updates, New, Orphans) at the top of the sidebar; each navigates to the matching filter
+- **Collections** — group packages into named collections with custom SF Symbol icons and colors; persisted to `~/.pkglens/collections.json`
+- **Inline changelog** — per-package version history fetched from GitHub Releases or registry APIs (npm time dict fallback); pre-release and platform-specific versions filtered out; "Release Notes" link per entry
+- **Recently Added filter** — "New" tile and sidebar filter show packages installed in the last 7 days
+- **Upgrade All extended** — bulk upgrade now covers pip, gem, and Cargo in addition to Homebrew and npm
+
+### Changed
+
+- Sort picker moved above the package list for contextual placement; removed from window toolbar
+- ⌘F toggles search field on/off (previously only activated it); switching sidebar filters clears search text automatically
+- Left color stripe removed from package rows for a cleaner look
+- Version history entries show a "Release Notes" capsule button linking to the release URL when available
+
+### Fixed
+
+- npm changelog fetcher now uses GitHub Releases API (`per_page=50`) and falls back to npm time dict; platform-specific version strings (e.g. `0.150.1-win32-arm64`) are filtered before display
+- Collection creation sheet no longer opens and closes multiple times when adding a new collection
+- Upgrade All was previously limited to Homebrew and npm; all sources now supported
+
+---
+
+## [1.0.1] — 2026-08-28
+
+### Fixed
+
+- npm `upgrade` command now passes the node bin directory in `PATH` so `npm install -g` targets the correct runtime prefix instead of falling back to the system npm
+
+---
+
 ## [1.0.0] — 2026-08-28
 
 ### Added
@@ -72,4 +105,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+[1.0.2]: https://github.com/canberkys/pkglens/releases/tag/v1.0.2
+[1.0.1]: https://github.com/canberkys/pkglens/releases/tag/v1.0.1
 [1.0.0]: https://github.com/canberkys/pkglens/releases/tag/v1.0.0
