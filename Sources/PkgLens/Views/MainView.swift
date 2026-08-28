@@ -177,17 +177,13 @@ private struct ToolbarItems: ToolbarContent {
     let onExport: () -> Void
 
     var body: some ToolbarContent {
-        // Separate ToolbarItems so macOS can overflow/collapse each independently.
         ToolbarItem(placement: .primaryAction) {
             Button(action: onExport) {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
+            .buttonStyle(.bordered)
             .disabled(vm.packages.isEmpty)
             .help("Export package list")
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            checkUpdatesButton
         }
 
         ToolbarItem(placement: .primaryAction) {
@@ -196,9 +192,10 @@ private struct ToolbarItems: ToolbarContent {
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.bordered)
             .disabled(vm.isLoading)
             .keyboardShortcut("r", modifiers: .command)
-            .help("Refresh all packages")
+            .help("Refresh all packages (⌘R)")
         }
 
         ToolbarItem(placement: .primaryAction) {
@@ -210,28 +207,6 @@ private struct ToolbarItems: ToolbarContent {
             .pickerStyle(.menu)
             .fixedSize()
             .help("Sort order")
-        }
-    }
-
-    @ViewBuilder
-    private var checkUpdatesButton: some View {
-        if vm.isCheckingUpdates {
-            ProgressView().controlSize(.small)
-                .help("Checking for updates…")
-        } else if vm.updateCount > 0 {
-            Button { Task { await vm.checkForUpdates() } } label: {
-                Label("\(vm.updateCount) updates", systemImage: "arrow.up.circle.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-            .disabled(vm.isLoading)
-            .help("\(vm.updateCount) updates available — click to re-check")
-        } else {
-            Button { Task { await vm.checkForUpdates() } } label: {
-                Label("Check Updates", systemImage: "arrow.up.circle")
-            }
-            .disabled(vm.isLoading)
-            .help("Check for package updates")
         }
     }
 }

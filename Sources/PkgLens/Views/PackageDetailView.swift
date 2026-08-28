@@ -12,6 +12,7 @@ struct PackageDetailView: View {
     @State private var calculatedSize: String? = nil
     @State private var isCalculatingSize = false
     @State private var usedByList: [String] = []
+    @State private var isCheckingVersion = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +44,7 @@ struct PackageDetailView: View {
                         .padding(.bottom, 12)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
 
@@ -103,6 +105,8 @@ struct PackageDetailView: View {
             ActionBar(
                 package: package,
                 isUninstalling: isUninstalling,
+                isCheckingVersion: isCheckingVersion,
+                onCheckVersion: { Task { await performCheckVersion() } },
                 onUninstall: { showUninstallConfirm = true }
             )
         }
@@ -150,6 +154,13 @@ struct PackageDetailView: View {
             uninstallError = error.localizedDescription
         }
         isUninstalling = false
+    }
+
+    private func performCheckVersion() async {
+        guard !isCheckingVersion else { return }
+        isCheckingVersion = true
+        await vm.checkVersion(for: package)
+        isCheckingVersion = false
     }
 
     private func performUpgrade() async {
@@ -469,16 +480,35 @@ private struct NotesSection: View {
 private struct ActionBar: View {
     let package: Package
     let isUninstalling: Bool
+    let isCheckingVersion: Bool
+    let onCheckVersion: () -> Void
     let onUninstall: () -> Void
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
             if !package.installedOnRequest {
                 Label("Installed as dependency", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
+
+            // Per-package version check — only for sources that support it
+            if package.source != .cargo {
+                if isCheckingVersion {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(action: onCheckVersion) {
+                        Label(
+                            package.isOutdated ? "Re-check Version" : "Check for New Version",
+                            systemImage: "arrow.clockwise.circle"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
+            }
+
             if isUninstalling {
                 ProgressView("Uninstalling…").controlSize(.small)
             } else {
@@ -487,7 +517,7 @@ private struct ActionBar: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .controlSize(.large)
+                .controlSize(.regular)
             }
         }
         .padding(.horizontal, 24)

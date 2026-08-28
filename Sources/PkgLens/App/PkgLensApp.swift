@@ -19,6 +19,18 @@ struct PkgLensApp: App {
                 }
                 .keyboardShortcut("r", modifiers: .command)
             }
+            CommandGroup(replacing: .help) {
+                Button("PkgLens on GitHub") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/canberkys/pkglens")!)
+                }
+                Button("Report an Issue") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/canberkys/pkglens/issues/new")!)
+                }
+                Divider()
+                Button("What is an orphan package?") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/canberkys/pkglens#usage")!)
+                }
+            }
         }
 
         MenuBarExtra {

@@ -136,6 +136,33 @@ final class PackagesViewModel: ObservableObject {
         isCheckingUpdates = false
     }
 
+    // MARK: - Per-package version check
+
+    func checkVersion(for package: Package) async {
+        var latest: String? = nil
+        let key = package.name.lowercased()
+        switch package.source {
+        case .brewFormula, .brewCask:
+            let updates = (try? await brew.checkUpdates()) ?? [:]
+            latest = updates[package.name] ?? updates[key]
+        case .npm:
+            let updates = (try? await npm.checkUpdates()) ?? [:]
+            latest = updates[key]
+        case .pip:
+            let updates = (try? await pip.checkUpdates()) ?? [:]
+            latest = updates[key]
+        case .gem:
+            let updates = (try? await gem.checkUpdates()) ?? [:]
+            latest = updates[key]
+        case .cargo:
+            return
+        }
+        if let idx = packages.firstIndex(where: { $0.id == package.id }) {
+            packages[idx].latestVersion = latest
+        }
+        updateCount = packages.filter(\.isOutdated).count
+    }
+
     // MARK: - Uninstall
 
     func uninstall(_ package: Package) async throws {
