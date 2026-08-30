@@ -4,6 +4,7 @@
   <p><strong>One place for all your package managers on macOS.</strong></p>
 
   <p>
+    <a href="https://canberk.me/pkglens"><img src="https://img.shields.io/badge/Website-canberk.me%2Fpkglens-blueviolet?style=flat-square" alt="Website"></a>
     <a href="https://github.com/canberkys/pkglens/releases/latest"><img src="https://img.shields.io/github/v/release/canberkys/pkglens?style=flat-square&label=Download&color=007AFF" alt="Download"></a>
     <img src="https://img.shields.io/badge/macOS-14%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
     <img src="https://img.shields.io/badge/Swift-6-FA7343?style=flat-square&logo=swift&logoColor=white" alt="Swift 6">
