@@ -59,22 +59,10 @@ No Electron. No web view. Pure SwiftUI.
 
 ### Download (recommended)
 
-Grab the latest **PkgLens-1.0.2.dmg** from the [Releases](https://github.com/canberkys/pkglens/releases/latest) page.
-Open the DMG, drag PkgLens to Applications.
+Grab the latest **PkgLens-1.0.3.dmg** from the [Releases](https://github.com/canberkys/pkglens/releases/latest) page.
+Open the DMG, drag PkgLens to Applications, and launch — no Gatekeeper warning.
 
-> **First-launch on macOS 14 / 15**
->
-> PkgLens is open-source and not yet notarized through Apple. macOS will show a Gatekeeper warning on the first launch. To open it:
->
-> 1. Try to open the app — macOS will say it's blocked.
-> 2. Go to **System Settings → Privacy & Security**, scroll down.
-> 3. Click **"Open Anyway"** next to PkgLens.
-> 4. Confirm in the dialog that appears.
->
-> You only need to do this once. Alternatively, run this in Terminal:
-> ```bash
-> xattr -cr /Applications/PkgLens.app
-> ```
+> PkgLens is signed and notarized with Apple Developer ID since v1.0.3.
 
 ### Build from source
 
