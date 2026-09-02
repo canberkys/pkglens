@@ -1,0 +1,45 @@
+{
+  "$schema": "https://wvw.dev/apps.schema.json",
+  "store": {
+    "name": "Canberk's Apps",
+    "developer": "canberkys",
+    "tagline": "macOS tools & utilities",
+    "github": "https://github.com/canberkys"
+  },
+  "categories": [
+    { "id": "macos", "name": "macOS Apps" },
+    { "id": "developer-tools", "name": "Developer Tools" },
+    { "id": "utilities", "name": "Utilities" }
+  ],
+  "apps": [
+    {
+      "id": "pkglens",
+      "name": "PkgLens",
+      "subtitle": "One place for all your package managers on macOS",
+      "description": "Homebrew, npm, pip, Cargo ve RubyGems'i tek native SwiftUI pencerede yönet.",
+      "longDescription": "PkgLens; Homebrew (formula + cask), npm, pip, Cargo ve RubyGems'i tarayıp tek bir native macOS pencerede gösterir. Neyin kurulu olduğunu, hangi paketlerin güncel olmadığını, hangilerinin güvenle kaldırılabileceğini ve her paketin diskte nerede durduğunu gör. Electron yok, web view yok — saf SwiftUI.",
+      "icon": "https://raw.githubusercontent.com/canberkys/pkglens/main/Screenshots/icon.png",
+      "category": ["macos", "developer-tools", "utilities"],
+      "platform": "macOS",
+      "price": "Free",
+      "github": "https://github.com/canberkys/pkglens",
+      "homepage": "https://canberk.me/pkglens",
+      "language": "Swift",
+      "downloadUrl": "https://github.com/canberkys/pkglens/releases/latest",
+      "requirements": "macOS 14 Sonoma veya üzeri",
+      "features": [
+        "6 paket yöneticisi: Homebrew, npm (nvm-aware), pip, Cargo, RubyGems",
+        "Tek tıkla güncelleme ve toplu 'Update All'",
+        "Orphan/stale paket tespiti ve toplu temizlik",
+        "GitHub release/registry'den inline changelog",
+        "Koleksiyonlar, notlar, uninstall geçmişi",
+        "Markdown/JSON export, menü çubuğu istatistikleri"
+      ],
+      "screenshots": [
+        "https://raw.githubusercontent.com/canberkys/pkglens/main/Screenshots/overview.png",
+        "https://raw.githubusercontent.com/canberkys/pkglens/main/Screenshots/detail.png",
+        "https://raw.githubusercontent.com/canberkys/pkglens/main/Screenshots/brew_detail.png"
+      ]
+    }
+  ]
+}
