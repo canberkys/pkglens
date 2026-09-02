@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.0.3] — 2026-09-02
+
+### Changed
+
+- Signed and notarized with Apple Developer ID — no more Gatekeeper warning on first launch
+- Version bump to reflect official distribution status
+
+---
+
 ## [1.0.2] — 2026-08-28
 
 ### Added
